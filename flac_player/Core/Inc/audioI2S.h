@@ -8,6 +8,11 @@
 #ifndef AUDIOI2S_H_
 #define AUDIOI2S_H_
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include "stdbool.h"
 #include "stm32f4xx_hal.h"
 
@@ -66,5 +71,9 @@ void audioI2S_stop(void);
  */
 void audioI2S_halfTransfer_Callback(void);
 void audioI2S_fullTransfer_Callback(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* AUDIOI2S_H_ */
