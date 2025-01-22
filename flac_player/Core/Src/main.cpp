@@ -74,6 +74,8 @@ extern FIL wav_file;
 // playback
 bool continue_playback = false;
 bool play_pause_toggle = false;
+bool shuffle_toggle = false;
+bool loop_toggle = false;
 
 // volume
 bool mute_toggle = false;
@@ -318,8 +320,12 @@ void handle_player_controls(void)
         CS43_set_mute(mute_toggle);
         update_volume_bar(mute_toggle ? 0 : volume);
         break;
+    case 4: // Shuffle mode
+    	shuffle_toggle ^= 1;
+    	HAL_GPIO_TogglePin(LD3_ORANGE_GPIO_Port, LD3_ORANGE_Pin);
+    	break;
     case 5: // Previous Track
-        player_previous_track();
+        shuffle_toggle ? player_random_track() : player_previous_track();
         player_play();
         lcd16x2_i2c_set_cursor(1, 8);
         lcd16x2_i2c_print_audio(chars_to_display > 8 ? "//i" : "//p");
@@ -330,7 +336,7 @@ void handle_player_controls(void)
         handle_play_pause_toggle();
         break;
     case 7: // Next Track
-        player_next_track();
+    	shuffle_toggle ? player_random_track() : player_next_track();
         player_play();
         lcd16x2_i2c_set_cursor(1, 8);
         lcd16x2_i2c_print_audio(chars_to_display > 8 ? "//i" : "//p");
@@ -342,7 +348,7 @@ void handle_player_controls(void)
         CS43_set_volume(volume);
         update_volume_bar(volume);
         break;
-    case 16:
+    case 16: // file selection mode
         file_select();
         break;
     default:
@@ -515,7 +521,20 @@ int main(void)
             if (continue_playback)
             {
                 audio_i2s_stop();
-                wav_file_list.current_index = (wav_file_list.current_index + 1) % wav_file_list.count;
+                if (shuffle_toggle)
+                {
+                	int new_index;
+
+                		    do {
+                		        new_index = rand() % wav_file_list.count;
+                		    } while (new_index == wav_file_list.current_index);
+
+                		    wav_file_list.current_index = new_index;
+                }
+                else
+                {
+                	wav_file_list.current_index = (wav_file_list.current_index + 1) % wav_file_list.count;
+                }
                 update_track_display();
             }
         }

@@ -153,6 +153,29 @@ bool player_previous_track(void)
     return player_file_select(wav_file_list.filenames[wav_file_list.current_index]);
 }
 
+bool player_random_track(void)
+{
+	// Stop current playback
+	audio_i2s_stop();
+
+	if (wav_file_list.count == 0 || wav_file_list.count == 1) {
+	        return false;
+	    }
+
+	    int new_index;
+
+	    do {
+	        new_index = rand() % wav_file_list.count;
+	    } while (new_index == wav_file_list.current_index);
+
+	    wav_file_list.current_index = new_index;
+
+	    // Play the selected track
+	    return player_file_select(wav_file_list.filenames[wav_file_list.current_index]);
+
+
+}
+
 bool player_is_finished(void)
 {
     return is_finished;

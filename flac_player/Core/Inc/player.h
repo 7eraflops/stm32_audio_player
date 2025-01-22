@@ -52,6 +52,8 @@ bool player_next_track(void);
 
 bool player_previous_track(void);
 
+bool player_random_track(void);
+
 #ifdef __cplusplus
 }
 #endif
