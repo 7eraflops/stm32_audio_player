@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <string>
 
-using buffer_sample_type = int16_t;
+using buffer_sample_type = int32_t;
 
 struct Stream_info
 {

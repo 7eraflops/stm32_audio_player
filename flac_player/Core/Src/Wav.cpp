@@ -42,7 +42,7 @@ void Wav::write_samples(const std::vector<buffer_sample_type>& buffer)
 {
     for (const auto& sample : buffer)
     {
-    	write_int16(sample);
+    	write_int16(static_cast<int16_t>(sample));
     }
 }
 

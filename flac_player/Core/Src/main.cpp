@@ -81,7 +81,7 @@ uint8_t volume = 191;
 uint8_t chars_to_display;
 
 // text
-char scroll_text[MAX_FILENAME_LENGTH];
+char scroll_text[MAX_FILENAME_LENGTH] __attribute__((section(".ccmram")));
 uint8_t text_length = 0;
 uint8_t current_position = 0;
 uint16_t scroll_delay = 750;
@@ -263,8 +263,7 @@ void decode_file(void)
     while (!decoder.get_reader().eos())
     {
         decoder.decode_frame();
-        const std::vector<buffer_sample_type> buffer = decoder.get_audio_buffer();
-        writer.write_samples(buffer);
+        writer.write_samples(decoder.get_audio_buffer());
 
         uint8_t boxes_should_show = decoder.get_sample_count() / samples_per_box;
 
@@ -279,6 +278,9 @@ void decode_file(void)
             f_close(&flac_file);
             f_close(&wav_file);
             f_unlink(temp_filename);
+            update_track_display();
+                lcd16x2_i2c_set_cursor(1, 0);
+                lcd16x2_i2c_printf("FLAC Select     ");
             key_number = 0;
             return;
         }
@@ -291,7 +293,7 @@ void decode_file(void)
 
     update_track_display();
     lcd16x2_i2c_set_cursor(1, 0);
-    lcd16x2_i2c_printf("FLAC Select");
+    lcd16x2_i2c_printf("FLAC Select     ");
 
     return;
 }
