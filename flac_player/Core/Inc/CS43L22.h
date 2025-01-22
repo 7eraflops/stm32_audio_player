@@ -1,5 +1,10 @@
+#ifndef CS43L22_H_
+#define CS43L22_H_
 
-//(1): Header files
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "stdbool.h"
 #include "stm32f4xx_hal.h"
 
@@ -50,3 +55,9 @@ void CS43_set_volume(uint8_t volume);
 void CS43_set_mute(bool mute);
 void CS43_start(void);
 void CS43_stop(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // CS43L22_H_

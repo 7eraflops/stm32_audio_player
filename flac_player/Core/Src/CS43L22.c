@@ -1,5 +1,5 @@
-#include "main.h"
 #include "CS43L22.h"
+#include "main.h"
 
 static I2C_HandleTypeDef i2cx;
 extern I2S_HandleTypeDef hi2s3;

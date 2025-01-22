@@ -24,16 +24,18 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "CS43L22.h"
-#include "audioI2S.h"
+#include "audio_i2s.h"
+#include "files.h"
 #include "lcd16x2_i2c.h"
-#include "wav_player.h"
+#include "player.h"
+
+#include "Flac.hpp"
+#include "Wav.hpp"
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-extern ApplicationTypeDef Appli_state;
-extern WAV_FileList wavFiles;
 
 /* USER CODE END PTD */
 
@@ -59,23 +61,35 @@ DMA_HandleTypeDef hdma_spi3_tx;
 TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
-
+// files
+extern ApplicationTypeDef Appli_state;
 bool is_usb_mounted = false;
+extern FILE_LIST wav_file_list;
+extern FILE_LIST flac_file_list;
+FILE_LIST *current_file_list = &wav_file_list;
 
+extern FIL flac_file;
+extern FIL wav_file;
+
+// playback
 bool continue_playback = false;
 bool play_pause_toggle = false;
+
+// volume
 bool mute_toggle = false;
 uint8_t volume = 191;
 uint8_t chars_to_display;
 
-volatile uint8_t key_number = 0;
-volatile uint8_t user_button = 0;
-
+// text
 char scroll_text[MAX_FILENAME_LENGTH];
 uint8_t text_length = 0;
 uint8_t current_position = 0;
 uint16_t scroll_delay = 750;
-uint8_t scrolling_active = 0;
+bool scrolling_active = false;
+
+// buttons
+volatile uint8_t key_number = 0;
+volatile uint8_t user_button = 0;
 
 GPIO_InitTypeDef GPIO_InitStructPrivate = {0};
 
@@ -105,6 +119,7 @@ const uint8_t KEY_VALUES[4][4] = {
     {13, 14, 15, 16} // Row 4 values
 };
 
+// debouncing
 uint32_t previous_time = 0;
 uint32_t current_time = 0;
 
@@ -123,6 +138,7 @@ void MX_USB_HOST_Process(void);
 /* USER CODE BEGIN PFP */
 void initialize_peripherals(void);
 void file_select(void);
+void decode_file(void);
 void handle_player_controls(void);
 void handle_play_pause_toggle(void);
 void update_track_display(void);
@@ -139,7 +155,7 @@ void initialize_peripherals()
     CS43_Init(hi2c1, CS43_MODE_I2S);
     CS43_set_volume(volume);
     CS43_enable_right_left(CS43_RIGHT_LEFT);
-    audioI2S_setHandle(&hi2s3);
+    audio_i2s_set_handle(&hi2s3);
 
     // LCD init
     lcd16x2_i2c_init(&hi2c3);
@@ -152,28 +168,132 @@ void initialize_peripherals()
 
 void file_select(void)
 {
-    while (key_number != 6)
+    while (!continue_playback)
     {
         switch (key_number)
         {
         case 5: // Previous file
-            wavFiles.currentIndex = (wavFiles.currentIndex - 1 + wavFiles.count) % wavFiles.count;
-            lcd16x2_i2c_clear();
+            current_file_list->current_index = (current_file_list->current_index - 1 + current_file_list->count) % current_file_list->count;
             update_track_display();
             key_number = 0;
             break;
         case 6: // Select
-            continue_playback = true;
+            if (current_file_list == &wav_file_list)
+            {
+                continue_playback = true;
+            }
+            else
+            {
+                decode_file();
+            }
+            key_number = 0;
             break;
         case 7: // Next file
-            wavFiles.currentIndex = (wavFiles.currentIndex + 1) % wavFiles.count;
+            current_file_list->current_index = (current_file_list->current_index + 1) % current_file_list->count;
+            update_track_display();
+            key_number = 0;
+            break;
+        case 16:
             lcd16x2_i2c_clear();
+            if (current_file_list == &wav_file_list)
+            {
+                current_file_list = &flac_file_list;
+                scan_usb("flac");
+                lcd16x2_i2c_set_cursor(1, 0);
+                lcd16x2_i2c_printf("FLAC Select");
+            }
+            else
+            {
+                current_file_list = &wav_file_list;
+                scan_usb("wav");
+                lcd16x2_i2c_set_cursor(1, 0);
+                lcd16x2_i2c_printf("WAV Select");
+            }
             update_track_display();
             key_number = 0;
             break;
         }
+        if (continue_playback)
+        {
+            break;
+        }
     }
-    key_number = 0;
+}
+
+void decode_file(void)
+{
+    char temp_filename[256]{};
+    char final_filename[256]{};
+    f_close(&flac_file);
+    f_close(&wav_file);
+
+    if (f_open(&flac_file, flac_file_list.filenames[flac_file_list.current_index], FA_READ) != FR_OK)
+    {
+        return;
+    }
+
+    strcpy(temp_filename, flac_file_list.filenames[flac_file_list.current_index]);
+    strcpy(final_filename, flac_file_list.filenames[flac_file_list.current_index]);
+    char *temp_ext = strstr(temp_filename, ".flac");
+    char *final_ext = strstr(final_filename, ".flac");
+    if (temp_ext && final_ext)
+    {
+        strcpy(temp_ext, ".temp");
+        strcpy(final_ext, ".wav");
+    }
+
+    if (f_open(&wav_file, temp_filename, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+    {
+        f_close(&flac_file);
+        return;
+    }
+
+    Flac decoder (flac_file);
+    decoder.initialize();
+
+    Wav writer(wav_file, decoder.get_stream_info());
+
+    uint64_t samples_per_box = decoder.get_stream_info().total_samples / 16;
+    uint8_t current_boxes = 0; // Keep track of boxes we've printed
+
+    lcd16x2_i2c_set_cursor(1, 0);
+    lcd16x2_i2c_printf("                ");
+    lcd16x2_i2c_set_cursor(1, 0);
+
+    while (!decoder.get_reader().eos())
+    {
+        decoder.decode_frame();
+        const std::vector<buffer_sample_type> buffer = decoder.get_audio_buffer();
+        writer.write_samples(buffer);
+
+        uint8_t boxes_should_show = decoder.get_sample_count() / samples_per_box;
+
+        if (boxes_should_show > current_boxes && current_boxes < 16)
+        {
+            lcd16x2_i2c_print_audio("//v");
+            current_boxes++;
+        }
+
+        if (key_number == 1)
+        {
+            f_close(&flac_file);
+            f_close(&wav_file);
+            f_unlink(temp_filename);
+            key_number = 0;
+            return;
+        }
+    }
+
+    f_close(&flac_file);
+    f_close(&wav_file);
+    f_rename(temp_filename, final_filename);
+    f_unlink(temp_filename);
+
+    update_track_display();
+    lcd16x2_i2c_set_cursor(1, 0);
+    lcd16x2_i2c_printf("FLAC Select");
+
+    return;
 }
 
 void handle_player_controls(void)
@@ -181,7 +301,7 @@ void handle_player_controls(void)
     switch (key_number)
     {
     case 1: // Stop
-        wavPlayer_stop();
+        player_stop();
         lcd16x2_i2c_clear();
         continue_playback = false;
         play_pause_toggle = 0;
@@ -197,8 +317,8 @@ void handle_player_controls(void)
         update_volume_bar(mute_toggle ? 0 : volume);
         break;
     case 5: // Previous Track
-        wavPlayer_previousTrack();
-        wavPlayer_play();
+        player_previous_track();
+        player_play();
         lcd16x2_i2c_set_cursor(1, 8);
         lcd16x2_i2c_print_audio(chars_to_display > 8 ? "//i" : "//p");
         HAL_GPIO_WritePin(LD6_BLUE_GPIO_Port, LD6_BLUE_Pin, GPIO_PIN_SET);
@@ -208,8 +328,8 @@ void handle_player_controls(void)
         handle_play_pause_toggle();
         break;
     case 7: // Next Track
-        wavPlayer_nextTrack();
-        wavPlayer_play();
+        player_next_track();
+        player_play();
         lcd16x2_i2c_set_cursor(1, 8);
         lcd16x2_i2c_print_audio(chars_to_display > 8 ? "//i" : "//p");
         HAL_GPIO_WritePin(LD6_BLUE_GPIO_Port, LD6_BLUE_Pin, GPIO_PIN_SET);
@@ -219,6 +339,11 @@ void handle_player_controls(void)
         volume = (volume >= 16) ? volume - 16 : 0;
         CS43_set_volume(volume);
         update_volume_bar(volume);
+        break;
+    case 16:
+        file_select();
+        break;
+    default:
         break;
     }
     key_number = 0;
@@ -230,13 +355,13 @@ void handle_play_pause_toggle(void)
     lcd16x2_i2c_set_cursor(1, 8);
     if (play_pause_toggle)
     {
-        wavPlayer_pause();
+        player_pause();
         lcd16x2_i2c_print_audio(chars_to_display > 8 ? "//I" : "//P");
         HAL_GPIO_WritePin(LD6_BLUE_GPIO_Port, LD6_BLUE_Pin, GPIO_PIN_RESET);
     }
     else
     {
-        wavPlayer_resume();
+        player_resume();
         lcd16x2_i2c_print_audio(chars_to_display > 8 ? "//i" : "//p");
         HAL_GPIO_WritePin(LD6_BLUE_GPIO_Port, LD6_BLUE_Pin, GPIO_PIN_SET);
     }
@@ -247,7 +372,7 @@ void update_track_display(void)
     lcd16x2_i2c_set_cursor(0, 0);
     lcd16x2_i2c_printf("                ");
     lcd16x2_i2c_set_cursor(0, 0);
-    display_text(wavFiles.filenames[wavFiles.currentIndex]);
+    display_text(current_file_list->filenames[current_file_list->current_index]);
 }
 
 void display_text(const char *text)
@@ -273,19 +398,19 @@ void update_volume_bar(uint8_t volume)
     // Draw first half (positions 0-7)
     lcd16x2_i2c_set_cursor(1, 0);
     for (uint8_t i = 0; i < 16; i++)
-        {
-            lcd16x2_i2c_print_audio(i < chars_to_display ? "//v" : " ");
-        }
+    {
+        lcd16x2_i2c_print_audio(i < chars_to_display ? "//v" : " ");
+    }
 
     lcd16x2_i2c_set_cursor(1, 8);
-        if (chars_to_display > 8)
-        {
-            lcd16x2_i2c_print_audio(play_pause_toggle ? "//I" : "//i"); // Inverted symbols
-        }
-        else
-        {
-            lcd16x2_i2c_print_audio(play_pause_toggle ? "//P" : "//p"); // Normal symbols
-        }
+    if (chars_to_display > 8)
+    {
+        lcd16x2_i2c_print_audio(play_pause_toggle ? "//I" : "//i"); // Inverted symbols
+    }
+    else
+    {
+        lcd16x2_i2c_print_audio(play_pause_toggle ? "//P" : "//p"); // Normal symbols
+    }
 }
 
 /* USER CODE END 0 */
@@ -356,7 +481,9 @@ int main(void)
             {
                 f_mount(&USBHFatFS, (const TCHAR *)USBHPath, 1);
                 is_usb_mounted = true;
-                wavPlayer_scanUSB();
+                scan_usb("wav");
+                lcd16x2_i2c_set_cursor(1, 0);
+                lcd16x2_i2c_printf("WAV Select");
             }
 
             update_track_display();
@@ -371,20 +498,22 @@ int main(void)
             update_volume_bar(volume);
             HAL_GPIO_WritePin(LD6_BLUE_GPIO_Port, LD6_BLUE_Pin, GPIO_PIN_SET);
 
-            wavPlayer_fileSelect(wavFiles.filenames[wavFiles.currentIndex]);
-            wavPlayer_play();
+            player_file_select(wav_file_list.filenames[wav_file_list.current_index]);
+            player_play();
 
-            while (!wavPlayer_isFinished())
+            while (!player_is_finished())
             {
-                wavPlayer_process();
+                player_process();
                 handle_player_controls();
                 if (!continue_playback)
+                {
                     break;
+                }
             }
             if (continue_playback)
             {
-                audioI2S_stop();
-                wavFiles.currentIndex = (wavFiles.currentIndex + 1) % wavFiles.count;
+                audio_i2s_stop();
+                wav_file_list.current_index = (wav_file_list.current_index + 1) % wav_file_list.count;
                 update_track_display();
             }
         }
@@ -675,57 +804,51 @@ static void MX_GPIO_Init(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     current_time = HAL_GetTick();
-    if (current_time - previous_time <= 100)
+    if (current_time - previous_time <= 150)
     {
         return;
     }
 
-    if (GPIO_Pin == USER_BUTTON_Pin)
+    GPIO_InitStructPrivate.Pin = KEYBOARD_C1_Pin | KEYBOARD_C2_Pin | KEYBOARD_C3_Pin | KEYBOARD_C4_Pin;
+    GPIO_InitStructPrivate.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStructPrivate.Pull = GPIO_PULLUP;
+    GPIO_InitStructPrivate.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStructPrivate);
+    int triggered_col = -1;
+    for (int col = 0; col < NUM_COLS; col++)
     {
-        user_button = 1;
-    }
-    else
-    {
-        GPIO_InitStructPrivate.Pin = KEYBOARD_C1_Pin | KEYBOARD_C2_Pin | KEYBOARD_C3_Pin | KEYBOARD_C4_Pin;
-        GPIO_InitStructPrivate.Mode = GPIO_MODE_INPUT;
-        GPIO_InitStructPrivate.Pull = GPIO_PULLUP;
-        GPIO_InitStructPrivate.Speed = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(GPIOE, &GPIO_InitStructPrivate);
-        int triggered_col = -1;
-        for (int col = 0; col < NUM_COLS; col++)
+        if (GPIO_Pin == COL_PINS[col])
         {
-            if (GPIO_Pin == COL_PINS[col])
-            {
-                triggered_col = col;
-                break;
-            }
+            triggered_col = col;
+            break;
         }
-        if (triggered_col != -1)
+    }
+    if (triggered_col != -1)
+    {
+        for (int row = 0; row < NUM_ROWS; row++)
         {
-            for (int row = 0; row < NUM_ROWS; row++)
-            {
-                HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_SET);
-            }
-            for (int row = 0; row < NUM_ROWS; row++)
-            {
-                HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_RESET);
-                if (!HAL_GPIO_ReadPin(GPIOE, COL_PINS[triggered_col]))
-                {
-                    key_number = KEY_VALUES[row][triggered_col];
-                    HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_SET);
-                    break;
-                }
-                HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_SET);
-            }
+            HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_SET);
         }
         for (int row = 0; row < NUM_ROWS; row++)
         {
             HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_RESET);
+            if (!HAL_GPIO_ReadPin(GPIOE, COL_PINS[triggered_col]))
+            {
+                key_number = KEY_VALUES[row][triggered_col];
+                HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_SET);
+                break;
+            }
+            HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_SET);
         }
-        GPIO_InitStructPrivate.Mode = GPIO_MODE_IT_FALLING;
-        GPIO_InitStructPrivate.Pull = GPIO_PULLUP;
-        HAL_GPIO_Init(GPIOE, &GPIO_InitStructPrivate);
     }
+    for (int row = 0; row < NUM_ROWS; row++)
+    {
+        HAL_GPIO_WritePin(ROW_PORTS[row], ROW_PINS[row], GPIO_PIN_RESET);
+    }
+    GPIO_InitStructPrivate.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStructPrivate.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStructPrivate);
+
     previous_time = current_time;
 }
 

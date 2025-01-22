@@ -311,7 +311,7 @@ void lcd16x2_i2c_audio_ch(void)
     lcd16x2_i2c_send_command(LCD_SETDDRAMADDR); // Set DDRAM address = 0
 }
 
-void lcd16x2_i2c_print_audio(char *str)
+void lcd16x2_i2c_print_audio(const char *str)
 {
     char buf;
 
