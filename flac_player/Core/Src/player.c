@@ -3,6 +3,11 @@
 #include "player.h"
 #include "files.h"
 
+// Random number
+extern RNG_HandleTypeDef hrng;
+extern uint32_t random_number;
+extern bool random_number_ready;
+
 // WAV File System variables
 extern FIL wav_file;
 extern FILE_LIST wav_file_list;
@@ -164,9 +169,16 @@ bool player_random_track(void)
 
 	    int new_index;
 
-	    do {
-	        new_index = rand() % wav_file_list.count;
-	    } while (new_index == wav_file_list.current_index);
+    	do
+    	{
+        	if (random_number_ready)
+        	{
+        		random_number = HAL_RNG_ReadLastRandomNumber(&hrng);
+        		random_number_ready = false;
+        		HAL_RNG_GenerateRandomNumber_IT(&hrng);
+        	}
+    		new_index = random_number % wav_file_list.count;
+    	} while (new_index == wav_file_list.current_index);
 
 	    wav_file_list.current_index = new_index;
 
