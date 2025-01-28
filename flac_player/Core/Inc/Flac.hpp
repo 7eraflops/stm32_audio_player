@@ -1,8 +1,8 @@
 #pragma once
 
+#include <fatfs.h>
 #include <unordered_map>
 #include <vector>
-#include "fatfs.h"
 
 #include "Bit_reader.hpp"
 #include "Flac_constants.hpp"
@@ -48,7 +48,7 @@ public:
 
     // Getter functions
     const Stream_info &get_stream_info() { return m_stream_info; }
-    const uint64_t &get_sample_count() {return m_sample_count; }
+    const uint64_t &get_sample_count() { return m_sample_count; }
     const Frame_info &get_frame_info() { return m_frame_info; }
     const Vorbis_comment &get_vorbis_comment() { return m_vorbis_comment; }
     const Bit_reader<FIL> &get_reader() const { return m_reader; }

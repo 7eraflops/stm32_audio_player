@@ -2,8 +2,8 @@
 
 void Flac::set_file(FIL &flac_file)
 {
-	m_flac_file = flac_file;
-	m_reader.set_file(flac_file);
+    m_flac_file = flac_file;
+    m_reader.set_file(flac_file);
 }
 
 void Flac::initialize()
@@ -52,7 +52,7 @@ void Flac::read_metadata()
             break;
         case block_type::VORBIS_COMMENT:
             // read_metadata_block_VORBIS_COMMENT();
-        	m_reader.seek(block_length);
+            m_reader.seek(block_length);
             break;
         case block_type::CUESHEET:
             // TODO: implement function for CUESHEET block
@@ -114,10 +114,11 @@ void Flac::read_metadata_block_VORBIS_COMMENT()
         }
 
         std::vector<char> comment_data(comment_length);
-                for (uint32_t j = 0; j < comment_length; j++) {
-                    comment_data[j] = static_cast<char>(m_reader.read_bits_unsigned(8));
-                }
-                std::string comment(comment_data.begin(), comment_data.end());
+        for (uint32_t j = 0; j < comment_length; j++)
+        {
+            comment_data[j] = static_cast<char>(m_reader.read_bits_unsigned(8));
+        }
+        std::string comment(comment_data.begin(), comment_data.end());
 
         size_t delimiter_pos = comment.find('=');
         if (delimiter_pos != std::string::npos)

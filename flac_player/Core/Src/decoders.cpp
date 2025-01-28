@@ -1,6 +1,6 @@
 #include "decoders.hpp"
 
-uint64_t decode_utf8(Bit_reader<FIL>& reader)
+uint64_t decode_utf8(Bit_reader<FIL> &reader)
 {
     uint8_t first_byte = reader.get_byte();
 
@@ -16,17 +16,16 @@ uint64_t decode_utf8(Bit_reader<FIL>& reader)
         {0xF8, 0xF0, 3},
         {0xFC, 0xF8, 4},
         {0xFE, 0xFC, 5},
-        {0xFF, 0xFE, 6}
-    };
+        {0xFF, 0xFE, 6}};
 
     uint64_t code_point = 0;
     size_t additional_bytes = 0;
 
-    for (const auto& mask : utf8_masks)
+    for (const auto &mask : utf8_masks)
     {
         if ((first_byte & mask.mask) == mask.match)
         {
-            code_point = first_byte & ~mask.mask;  // Strip the prefix bits
+            code_point = first_byte & ~mask.mask; // Strip the prefix bits
             additional_bytes = mask.bits;
             break;
         }
@@ -52,7 +51,7 @@ uint64_t decode_utf8(Bit_reader<FIL>& reader)
     return code_point;
 }
 
-uint64_t decode_unary(Bit_reader<FIL>& reader)
+uint64_t decode_unary(Bit_reader<FIL> &reader)
 {
     uint64_t result = 0;
 
@@ -63,7 +62,7 @@ uint64_t decode_unary(Bit_reader<FIL>& reader)
     return result;
 }
 
-int64_t decode_and_unfold_rice(uint8_t rice_parameter, Bit_reader<FIL>& reader)
+int64_t decode_and_unfold_rice(uint8_t rice_parameter, Bit_reader<FIL> &reader)
 {
     uint64_t quotient = decode_unary(reader);
     uint64_t remainder = reader.read_bits_unsigned(rice_parameter);

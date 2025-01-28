@@ -1,61 +1,65 @@
-#ifndef WAV_PLAYER_H_
-#define WAV_PLAYER_H_
+#ifndef PLAYER_H_
+#define PLAYER_H_
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
+#include <fatfs.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-#define AUDIO_BUFFER_SIZE 32768
+#include "audio_i2s.h"
+#include "files.h"
 
-// Audio buffer state
-typedef struct
-{
-    uint32_t chunk_id;        /* 0 */
-    uint32_t file_size;       /* 4 */
-    uint32_t file_format;     /* 8 */
-    uint32_t subchunk_1_id;   /* 12 */
-    uint32_t subchunk_1_size; /* 16*/
-    uint16_t audio_format;    /* 20 */
-    uint16_t channel_count;   /* 22 */
-    uint32_t sample_rate;     /* 24 */
+#define AUDIO_BUFFER_SIZE 4096
 
-    uint32_t byte_rate;       /* 28 */
-    uint16_t block_align;     /* 32 */
-    uint16_t bits_per_sample; /* 34 */
-    uint32_t sunchunk_2_id;   /* 36 */
-    uint32_t subchunk_2_size; /* 40 */
+    typedef struct
+    {
+        uint32_t chunk_id;
+        uint32_t file_size;
+        uint32_t file_format;
+        uint32_t subchunk_1_id;
+        uint32_t subchunk_1_size;
+        uint16_t audio_format;
+        uint16_t channel_count;
+        uint32_t sample_rate;
 
-} WAV_HEADER_STRUCT;
+        uint32_t byte_rate;
+        uint16_t block_align;
+        uint16_t bits_per_sample;
+        uint32_t sunchunk_2_id;
+        uint32_t subchunk_2_size;
 
-bool is_wav_file(const char *file_name);
+    } WAV_HEADER_STRUCT;
 
-bool player_scan_usb(void);
+    bool is_wav_file(const char *file_name);
 
-bool player_file_select(const char *file_path);
+    bool player_scan_usb(void);
 
-void player_play(void);
+    bool player_file_select(const char *file_path);
 
-void player_stop(void);
+    void player_play(void);
 
-void player_process(void);
+    void player_stop(void);
 
-bool player_is_finished(void);
+    void player_process(void);
 
-void player_pause(void);
+    bool player_is_finished(void);
 
-void player_resume(void);
+    void player_pause(void);
 
-bool player_next_track(void);
+    void player_resume(void);
 
-bool player_previous_track(void);
+    bool player_next_track(void);
 
-bool player_random_track(void);
+    bool player_previous_track(void);
+
+    bool player_random_track(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* WAV_PLAYER_H_ */
+#endif /* PLAYER_H_ */

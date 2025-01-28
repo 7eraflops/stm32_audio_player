@@ -1,27 +1,20 @@
-#include "audio_i2s.h"
-#include "fatfs.h"
 #include "player.h"
-#include "files.h"
 
-// Random number
 extern RNG_HandleTypeDef hrng;
 extern uint32_t random_number;
 extern bool random_number_ready;
 
-// WAV File System variables
 extern FIL wav_file;
 extern FILE_LIST wav_file_list;
 
-// WAV Audio Buffer
 static uint32_t file_length;
 static uint8_t audio_buffer[AUDIO_BUFFER_SIZE];
 static __IO uint32_t audio_size_remaining = 0;
 
-// WAV Player
 static uint32_t sampling_frequency;
 static UINT player_read_bytes = 0;
 static bool is_finished = false;
-// WAV Player process states
+
 typedef enum
 {
     PLAYER_STATE_IDLE = 0,
@@ -44,16 +37,12 @@ bool player_file_select(const char *file_path)
 
     f_close(&wav_file);
 
-    // Open WAV file
     if (f_open(&wav_file, file_path, FA_READ) != FR_OK)
     {
         return false;
     }
-    // Read WAV file Header
     f_read(&wav_file, &wav_header, sizeof(wav_header), &readBytes);
-    // Get audio data size
     file_length = wav_header.file_size;
-    // Play the WAV file with frequency specified in header
     sampling_frequency = wav_header.sample_rate;
     return true;
 }
@@ -61,13 +50,10 @@ bool player_file_select(const char *file_path)
 void player_play(void)
 {
     is_finished = false;
-    // Initialise I2S Audio Sampling settings
     audio_i2s_init(sampling_frequency);
-    // Read Audio data from USB Disk
-    f_lseek(&wav_file, 44);
+
     f_read(&wav_file, &audio_buffer[0], AUDIO_BUFFER_SIZE, &player_read_bytes);
     audio_size_remaining = file_length - player_read_bytes;
-    // Start playing the WAV
     audio_i2s_play((uint16_t *)&audio_buffer[0], AUDIO_BUFFER_SIZE);
 }
 
@@ -123,7 +109,6 @@ void player_stop(void)
     is_finished = true;
 }
 
-
 void player_pause(void)
 {
     audio_i2s_pause();
@@ -136,56 +121,43 @@ void player_resume(void)
 
 bool player_next_track(void)
 {
-    // Stop current playback
     audio_i2s_stop();
-
-    // Move to next track with wrapping
     wav_file_list.current_index = (wav_file_list.current_index + 1) % wav_file_list.count;
-
-    // Select and play the new track
     return player_file_select(wav_file_list.filenames[wav_file_list.current_index]);
 }
 
 bool player_previous_track(void)
 {
-    // Stop current playback
     audio_i2s_stop();
-
-    // Move to previous track with wrapping
     wav_file_list.current_index = (wav_file_list.current_index - 1 + wav_file_list.count) % wav_file_list.count;
-
-    // Select and play the new track
     return player_file_select(wav_file_list.filenames[wav_file_list.current_index]);
 }
 
 bool player_random_track(void)
 {
-	// Stop current playback
-	audio_i2s_stop();
+    audio_i2s_stop();
 
-	if (wav_file_list.count == 0 || wav_file_list.count == 1) {
-	        return false;
-	    }
+    if (wav_file_list.count == 0 || wav_file_list.count == 1)
+    {
+        return false;
+    }
 
-	    int new_index;
+    int new_index;
 
-    	do
-    	{
-        	if (random_number_ready)
-        	{
-        		random_number = HAL_RNG_ReadLastRandomNumber(&hrng);
-        		random_number_ready = false;
-        		HAL_RNG_GenerateRandomNumber_IT(&hrng);
-        	}
-    		new_index = random_number % wav_file_list.count;
-    	} while (new_index == wav_file_list.current_index);
+    do
+    {
+        if (random_number_ready)
+        {
+            random_number = HAL_RNG_ReadLastRandomNumber(&hrng);
+            random_number_ready = false;
+            HAL_RNG_GenerateRandomNumber_IT(&hrng);
+        }
+        new_index = random_number % wav_file_list.count;
+    } while (new_index == wav_file_list.current_index);
 
-	    wav_file_list.current_index = new_index;
+    wav_file_list.current_index = new_index;
 
-	    // Play the selected track
-	    return player_file_select(wav_file_list.filenames[wav_file_list.current_index]);
-
-
+    return player_file_select(wav_file_list.filenames[wav_file_list.current_index]);
 }
 
 bool player_is_finished(void)

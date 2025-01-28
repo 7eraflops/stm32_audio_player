@@ -1,19 +1,17 @@
 #pragma once
 #include <cstdint>
-#include "fatfs.h"
+#include <fatfs.h>
 
 template <typename FatFS_File>
 class Bit_reader
 {
 private:
-    // Original fields
-    FatFS_File* m_file{};
+    FatFS_File *m_file{};
     uint64_t m_bit_buffer{};
     uint8_t m_bits_in_buffer{};
     FSIZE_t m_file_size{};
     FSIZE_t m_current_pos{};
 
-    // Buffer fields
     static constexpr size_t BUFFER_SIZE = 32768;
     uint8_t m_read_buffer[BUFFER_SIZE]{};
     size_t m_buffer_pos{};
@@ -39,14 +37,14 @@ private:
     }
 
 public:
-    explicit Bit_reader(FatFS_File& file) : m_file(&file)
+    explicit Bit_reader(FatFS_File &file) : m_file(&file)
     {
         m_file_size = f_size(m_file);
         m_current_pos = f_tell(m_file);
         fill_buffer();
     }
 
-    void set_file(FIL& file)
+    void set_file(FIL &file)
     {
         m_file = &file;
         m_file_size = f_size(m_file);
@@ -121,7 +119,7 @@ public:
         m_bits_in_buffer -= m_bits_in_buffer % 8;
     }
 
-    bool peek_byte(uint8_t& byte) const
+    bool peek_byte(uint8_t &byte) const
     {
         if (eos())
         {
@@ -149,29 +147,24 @@ public:
     FRESULT seek(FSIZE_t offset)
     {
         FSIZE_t new_pos = m_current_pos + offset;
-
-        // Check if the new position is within our current buffer
         FSIZE_t buffer_start = m_current_pos - m_buffer_pos;
         FSIZE_t buffer_end = buffer_start + m_buffer_size;
 
         if (new_pos >= buffer_start && new_pos < buffer_end)
         {
-            // The target position is within our current buffer
-            // Just update the buffer position
             m_buffer_pos = new_pos - buffer_start;
             m_current_pos = new_pos;
-            m_bits_in_buffer = 0;  // Reset bit buffer as we're at a new position
+            m_bits_in_buffer = 0;
             m_bit_buffer = 0;
             return FR_OK;
         }
 
-        // If seeking outside current buffer, do a physical seek
         FRESULT result = f_lseek(m_file, new_pos);
         if (result == FR_OK)
         {
             m_current_pos = new_pos;
             m_buffer_pos = 0;
-            m_buffer_size = 0;     // Force buffer refill
+            m_buffer_size = 0;
             m_bits_in_buffer = 0;
             m_bit_buffer = 0;
             fill_buffer();
