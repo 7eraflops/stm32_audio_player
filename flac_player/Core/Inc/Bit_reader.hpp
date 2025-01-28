@@ -12,7 +12,7 @@ private:
     FSIZE_t m_file_size{};
     FSIZE_t m_current_pos{};
 
-    static constexpr size_t BUFFER_SIZE = 32768;
+    static constexpr size_t BUFFER_SIZE = 4096;
     uint8_t m_read_buffer[BUFFER_SIZE]{};
     size_t m_buffer_pos{};
     size_t m_buffer_size{};
