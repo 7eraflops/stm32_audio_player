@@ -67,7 +67,7 @@ TIM_HandleTypeDef htim2;
 /* USER CODE BEGIN PV */
 // random number
 uint32_t random_number;
-bool random_number_ready = false;
+volatile bool random_number_ready = false;
 
 // files
 extern ApplicationTypeDef Appli_state;

@@ -9,7 +9,7 @@ extern FILE_LIST wav_file_list;
 
 static uint32_t file_length;
 static uint8_t audio_buffer[AUDIO_BUFFER_SIZE];
-static __IO uint32_t audio_size_remaining = 0;
+static uint32_t audio_size_remaining = 0;
 
 static uint32_t sampling_frequency;
 static UINT player_read_bytes = 0;
